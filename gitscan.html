@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitScan — GitHub 账号与仓库速查</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:     #0d1117;
+  --panel:  #161b22;
+  --inset:  #010409;
+  --border: #21262d;
+  --brd2:   #30363d;
+  --text:   #e6edf3;
+  --muted:  #8b949e;
+  --green:  #2ea043;
+  --grn2:   #3fb950;
+  --glow:   rgba(46,160,67,.28);
+  --blue:   #58a6ff;
+  --orange: #e3853d;
+  --red:    #f85149;
+  --yellow: #d29922;
+  --purple: #bc8cff;
+  --stat-color: #9ba7b4;
+  --shadow-menu: 0 8px 24px rgba(0,0,0,.5);
+}
+
+/* ── Light theme overrides ── */
+[data-theme="light"] {
+  --bg:     #ffffff;
+  --panel:  #f6f8fa;
+  --inset:  #ffffff;
+  --border: #d0d7de;
+  --brd2:   #d0d7de;
+  --text:   #1f2328;
+  --muted:  #59636e;
+  --green:  #1a7f37;
+  --grn2:   #2da44e;
+  --glow:   rgba(26,127,55,.15);
+  --blue:   #0969da;
+  --orange: #bc4c00;
+  --red:    #cf222e;
+  --yellow: #9a6700;
+  --purple: #8250df;
+  --stat-color: #57606a;
+  --shadow-menu: 0 8px 24px rgba(140,149,159,.25);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56px 16px 80px;
+  transition: background-color .25s ease, color .25s ease;
+}
+
+/* ── Theme toggle ── */
+.theme-wrap { position: fixed; top: 14px; left: 16px; z-index: 200; }
+.theme-trigger {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: var(--panel); border: 1px solid var(--brd2); border-radius: 7px;
+  color: var(--muted); cursor: pointer;
+  transition: color .2s, border-color .2s, background-color .25s;
+}
+.theme-trigger:hover { color: var(--text); border-color: var(--blue); }
+.theme-trigger svg { display: block; }
+.theme-trigger .icon-moon { display: none; }
+[data-theme="light"] .theme-trigger .icon-sun  { display: none; }
+[data-theme="light"] .theme-trigger .icon-moon { display: block; }
+
+/* ── Language selector ── */
+.lang-wrap { position: fixed; top: 14px; right: 16px; z-index: 200; }
+.lang-trigger {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--panel); border: 1px solid var(--brd2); border-radius: 7px;
+  color: var(--muted); font-size: 12px; font-family: inherit;
+  padding: 6px 11px; cursor: pointer; white-space: nowrap;
+  transition: color .2s, border-color .2s;
+}
+.lang-trigger:hover { color: var(--text); border-color: var(--blue); }
+.lang-trigger svg { transition: transform .2s; }
+.lang-trigger.open svg { transform: rotate(180deg); }
+.lang-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--panel); border: 1px solid var(--brd2); border-radius: 8px;
+  overflow: hidden; min-width: 148px;
+  box-shadow: var(--shadow-menu); display: none;
+}
+.lang-menu.open { display: block; }
+.lang-option {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 14px; background: none; border: none;
+  color: var(--muted); font-size: 13px; font-family: inherit;
+  cursor: pointer; text-align: left; transition: background .15s, color .15s;
+}
+.lang-option:hover { background: var(--border); color: var(--text); }
+.lang-option.active { color: var(--grn2); }
+.lang-flag { font-size: 15px; line-height: 1; }
+
+/* ── Header ── */
+.header { text-align: center; margin-bottom: 76px; }
+.header-top {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; margin-bottom: 6px;
+}
+.logo-icon { width: 30px; height: 30px; fill: var(--grn2); flex-shrink: 0; }
+[data-theme="light"] .logo-icon { fill: #6e40c9; }
+h1 { font-family: 'JetBrains Mono', monospace; font-size: clamp(22px,5vw,30px); font-weight: 700; letter-spacing: -.5px; }
+h1 span { color: var(--grn2); }
+[data-theme="light"] h1 span { color: #6e40c9; }
+
+/* ── Card ── */
+.card { width: 100%; max-width: 520px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+/* ── Search box ── */
+.search-box { padding: 20px 18px 0; }
+.input-row { display: flex; gap: 0; align-items: center; }
+.input-row .github-icon-btn { margin-right: 2px; }
+.input-row .search-field    { flex: 1; }
+.input-row .search-btn      { margin-left: 16px; }
+/* GitHub 图标独立在搜索框左侧 */
+.github-icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0;
+  background: none; border: none; border-radius: 0;
+  fill: var(--muted); opacity: .38;
+  transition: opacity .2s;
+}
+.github-icon-btn:hover { opacity: .7; }
+
+/* 大输入框包裹层（input only，无图标内嵌） */
+.search-field {
+  flex: 1; position: relative; display: flex; align-items: center; min-width: 0;
+}
+/* × 清空按钮 */
+.clear-btn {
+  position: absolute; right: 10px;
+  display: none; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--brd2); border: none; cursor: pointer;
+  color: var(--muted); font-size: 12px; line-height: 1;
+  transition: background .15s, color .15s;
+}
+.clear-btn:hover { background: var(--blue); color: #fff; }
+.clear-btn.visible { display: flex; }
+.uname-input {
+  width: 100%; background: var(--inset);
+  border: 1px solid var(--brd2); border-radius: 8px;
+  color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 15px;
+  padding: 10px 36px 10px 14px; /* 左侧不再内嵌图标 */
+  outline: none; transition: border-color .2s, box-shadow .2s;
+}
+.uname-input::placeholder { color: var(--muted); opacity: .5; }
+.uname-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--glow); }
+.search-btn {
+  background: var(--green); border: none; border-radius: 8px; color: #fff;
+  font-family: inherit; font-size: 14px; font-weight: 600; padding: 10px 18px;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  transition: background .2s, transform .1s;
+}
+.search-btn:hover { background: var(--grn2); }
+[data-theme="light"] .search-btn { background: var(--blue); }
+[data-theme="light"] .search-btn:hover { background: #0550ae; }
+.search-btn:active { transform: scale(.97); }
+.search-btn:disabled { opacity: .45; cursor: default; }
+.divider { height: 1px; background: var(--border); margin-top: 20px; }
+
+/* ── Result area ── */
+.result-area { padding: 18px; }
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; padding: 28px 0 10px; color: var(--muted); font-size: 13px;
+}
+.empty-state svg { opacity: .25; }
+.loading-state { display: none; align-items: center; gap: 10px; padding: 20px 0 8px; color: var(--muted); font-size: 13px; }
+.spinner { width: 15px; height: 15px; border: 2px solid var(--brd2); border-top-color: var(--grn2); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-box { display: none; background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.28); border-radius: 8px; padding: 12px 14px; font-size: 13px; color: var(--red); line-height: 1.5; }
+.rate-box  { display: none; background: rgba(210,153,34,.07); border: 1px solid rgba(210,153,34,.28); border-radius: 8px; padding: 12px 14px; font-size: 13px; color: var(--yellow); line-height: 1.5; }
+
+/* ── Profile result ── */
+.profile-result { display: none; flex-direction: column; gap: 12px; }
+
+/* user + age unified card */
+.info-age-card { background: var(--inset); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+/* user header */
+.user-header { display: flex; gap: 14px; align-items: flex-start; padding: 16px 16px 14px; border-bottom: 1px solid var(--border); }
+.avatar { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--brd2); flex-shrink: 0; background: var(--panel); }
+.user-meta { flex: 1; min-width: 0; }
+.user-name { font-weight: 600; font-size: 15px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-login { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--blue); margin-top: 2px; }
+.user-login a { color: inherit; text-decoration: none; }
+.user-login a:hover { text-decoration: underline; }
+.user-bio { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* age section */
+.age-section { padding: 16px; }
+.age-eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 10px; }
+.age-main-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.age-number-wrap { display: flex; align-items: baseline; gap: 6px; }
+.age-number { font-family: 'JetBrains Mono', monospace; font-size: clamp(38px,10vw,54px); font-weight: 700; color: var(--grn2); text-shadow: 0 0 22px var(--glow); line-height: 1; letter-spacing: -2px; }
+.age-unit { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: var(--muted); padding-bottom: 4px; }
+
+/* YMD mode — numbers + inline units with breathing room */
+.ymd-wrap { display: flex; align-items: baseline; gap: 2px; flex-wrap: nowrap; }
+.ymd-num { font-family: 'JetBrains Mono', monospace; font-size: clamp(30px,7.5vw,46px); font-weight: 700; color: var(--grn2); text-shadow: 0 0 22px var(--glow); line-height: 1; letter-spacing: -1px; }
+.ymd-u { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--muted); padding-bottom: 3px; margin-left: 4px; margin-right: 14px; } /* 4px: num→unit, 14px: pair→next pair */
+.ymd-u:last-child { margin-right: 0; }
+
+.convert-btn {
+  display: flex; align-items: center; gap: 4px; background: none;
+  border: 1px solid var(--brd2); border-radius: 5px; padding: 5px 10px;
+  font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace;
+  cursor: pointer; flex-shrink: 0; margin-bottom: 4px;
+  transition: color .2s, border-color .2s;
+}
+.convert-btn:hover { color: var(--text); border-color: var(--grn2); }
+
+.date-row { display: flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 12px; color: var(--muted); }
+.date-row svg { opacity: .6; flex-shrink: 0; }
+.date-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); }
+
+/* ── Stats row (2 cols) ── */
+.stats-row { display: flex; width: 100%; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--inset); }
+.stat { flex: 1; padding: 12px 10px; border-right: 1px solid var(--border); min-width: 0; text-align: center; }
+.stat:last-child { border-right: none; }
+.stat-val { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; color: var(--stat-color); }
+.stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ── Repo stat: 箭头/边框/meta 蓝 ── */
+.stat-repos { cursor: pointer; transition: background .15s; }
+.stat-repos:hover { background: rgba(88,166,255,.06); }
+.stat-inner { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.stat-inner-text { display: flex; flex-direction: column; align-items: center; }
+.repos-chevron { color: var(--blue); flex-shrink: 0; transition: transform .25s; }
+.repos-chevron.open { transform: rotate(180deg); }
+
+/* ── Repos panel ── */
+.repos-panel {
+  display: none; flex-direction: column;
+  border: none; border-radius: 8px; overflow: hidden; background: var(--inset);
+}
+.repos-search-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: none; background: var(--panel);
+}
+/* 搜索图标内嵌在输入框 */
+.repos-search-field {
+  flex: 1; position: relative; display: flex; align-items: center; min-width: 0;
+}
+.repos-search-icon {
+  position: absolute; left: 9px; pointer-events: none;
+  color: var(--muted); opacity: .55; flex-shrink: 0;
+}
+.repos-search-input {
+  width: 100%; background: var(--inset);
+  border: 1px solid var(--brd2); border-radius: 6px;
+  color: var(--text); font-family: inherit; font-size: 13px;
+  padding: 6px 28px 6px 30px;
+  outline: none; min-width: 0; transition: border-color .2s, box-shadow .2s;
+}
+.repos-search-input::placeholder { color: var(--muted); opacity: .5; }
+.repos-search-input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(88,166,255,.2); }
+/* 仓库搜索清空按钮 */
+.repos-clear-btn {
+  position: absolute; right: 7px;
+  display: none; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--brd2); border: none; cursor: pointer;
+  color: var(--muted); font-size: 11px; line-height: 1;
+  transition: background .15s, color .15s;
+}
+.repos-clear-btn:hover { background: var(--blue); color: #fff; }
+.repos-clear-btn.visible { display: flex; }
+/* reposMeta 颜色：与仓库名称同色 */
+.repos-meta { font-size: 12px; color: var(--blue); font-family: 'JetBrains Mono', monospace; font-weight: 600; white-space: nowrap; }
+
+.repos-list { max-height: 340px; overflow-y: auto; }
+.repos-list::-webkit-scrollbar { width: 4px; }
+.repos-list::-webkit-scrollbar-track { background: transparent; }
+.repos-list::-webkit-scrollbar-thumb { background: var(--brd2); border-radius: 2px; }
+
+.repo-item {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: default;
+}
+.repo-item:last-child { border-bottom: none; }
+
+.repo-top { display: flex; align-items: center; gap: 8px; }
+/* 只有名字链接本身才可点击跳转 */
+.repo-name {
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  font-weight: 600; color: var(--blue); flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-decoration: none; cursor: pointer;
+}
+.repo-name:hover { text-decoration: underline; }
+.repo-fork-badge {
+  font-size: 10px; color: var(--muted); background: var(--border);
+  border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0;
+}
+.repo-stars { display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); flex-shrink: 0; }
+
+.repo-desc { font-size: 12px; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.repo-bottom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.repo-lang { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.lang-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.repo-updated { font-size: 11px; color: var(--muted); }
+
+.repos-empty { padding: 24px; text-align: center; font-size: 13px; color: var(--muted); }
+.repos-loading-row { display: flex; align-items: center; gap: 8px; padding: 16px 14px; font-size: 13px; color: var(--muted); }
+.repos-error-row { padding: 12px 14px; font-size: 12px; color: var(--red); }
+.repos-more { padding: 10px 14px; font-size: 11px; color: var(--muted); text-align: center; border-top: 1px solid var(--border); background: var(--panel); }
+
+/* ── Footer ── */
+.footer { margin-top: 28px; font-size: 11px; color: var(--muted); text-align: center; }
+.footer a { color: var(--blue); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+.footer-api-name { color: var(--grn2); }
+[data-theme="light"] .footer-api-name { color: #6e40c9; }
+
+/* animation */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fade-up { animation: fadeUp .3s ease; }
+
+@media (max-width: 420px) {
+  body { padding-top: 44px; }
+}
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+</style>
+</head>
+<body>
+
+<!-- Theme toggle: fixed top-left -->
+<div class="theme-wrap" id="themeWrap">
+  <button class="theme-trigger" id="themeTrigger" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle light/dark theme">
+    <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <line x1="12" y1="2" x2="12" y2="4"/>
+      <line x1="12" y1="20" x2="12" y2="22"/>
+      <line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/>
+      <line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/>
+      <line x1="2" y1="12" x2="4" y2="12"/>
+      <line x1="20" y1="12" x2="22" y2="12"/>
+      <line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/>
+      <line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/>
+    </svg>
+    <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  </button>
+</div>
+
+<!-- Language selector: fixed top-right -->
+<div class="lang-wrap" id="langWrap">
+  <button class="lang-trigger" id="langTrigger" onclick="toggleMenu()">
+    🌐 <span id="langLabel">简体</span>
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+      <path d="M1 3l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <div class="lang-menu" id="langMenu">
+    <button class="lang-option" data-lang="zh"     onclick="setLang('zh')">    <span class="lang-flag">🇨🇳</span> 简体中文</button>
+    <button class="lang-option" data-lang="zh-TW"  onclick="setLang('zh-TW')"> <span class="lang-flag">🇹🇼</span> 繁體中文</button>
+    <button class="lang-option" data-lang="ja"     onclick="setLang('ja')">    <span class="lang-flag">🇯🇵</span> 日本語</button>
+    <button class="lang-option" data-lang="en"     onclick="setLang('en')">    <span class="lang-flag">🇬🇧</span> English</button>
+  </div>
+</div>
+
+<header class="header">
+  <div class="header-top">
+    <svg class="logo-icon" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+               0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+               -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+               .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+               -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+               .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+               .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+               0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8
+               c0-4.42-3.58-8-8-8z"/>
+    </svg>
+    <h1>Git<span>Scan</span></h1>
+  </div>
+</header>
+
+<div class="card">
+  <div class="search-box">
+    <div class="input-row">
+      <!-- GitHub icon独立在搜索框左侧 -->
+      <a href="https://github.com" target="_blank" rel="noopener" class="github-icon-btn" tabindex="-1" title="GitHub">
+        <svg width="18" height="18" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+                   0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+                   -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+                   .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+                   -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+                   .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+                   .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+                   0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8
+                   c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+      <div class="search-field">
+        <input class="uname-input" id="usernameInput" type="text"
+          autocomplete="off" autocapitalize="none" spellcheck="false"
+          oninput="toggleClearBtn()"/>
+        <button class="clear-btn" id="clearBtn" onclick="clearInput()" tabindex="-1">✕</button>
+      </div>
+      <button class="search-btn" id="searchBtn" onclick="query()">
+        <span id="searchBtnText">查询</span>
+      </button>
+    </div>
+  </div>
+  <div class="divider"></div>
+
+  <div class="result-area">
+    <div class="empty-state" id="emptyState">
+      <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>
+      </svg>
+      <span id="emptyText">输入用户名后按查询</span>
+    </div>
+    <div class="loading-state" id="loadingState">
+      <div class="spinner"></div>
+      <span id="loadingText">正在查询…</span>
+    </div>
+    <div class="error-box" id="errorBox"></div>
+    <div class="rate-box"  id="rateBox"></div>
+
+    <!-- Profile result -->
+    <div class="profile-result fade-up" id="profileResult">
+
+      <!-- User + age unified card -->
+      <div class="info-age-card">
+        <div class="user-header">
+          <img class="avatar" id="avatar" src="" alt=""/>
+          <div class="user-meta">
+            <div class="user-name"  id="profileName"></div>
+            <div class="user-login"><a id="profileLogin" href="#" target="_blank" rel="noopener"></a></div>
+            <div class="user-bio"   id="profileBio"></div>
+          </div>
+        </div>
+        <div class="age-section">
+          <div class="age-eyebrow" id="ageLabel">账号年龄</div>
+          <div class="age-main-row">
+            <!-- Mode 1: total days -->
+            <div class="age-number-wrap" id="daysWrap">
+              <span class="age-number" id="ageNumber">0</span>
+              <span class="age-unit"   id="ageUnit">天</span>
+            </div>
+            <!-- Mode 2: Y / M / D -->
+            <div class="ymd-wrap" id="ymdWrap" style="display:none">
+              <span class="ymd-num" id="ymdY">0</span><span class="ymd-u" id="ymdYu">年</span>
+              <span class="ymd-num" id="ymdM">0</span><span class="ymd-u" id="ymdMu">月</span>
+              <span class="ymd-num" id="ymdD">0</span><span class="ymd-u" id="ymdDu">天</span>
+            </div>
+            <button class="convert-btn" onclick="toggleUnit()">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+              </svg>
+              <span id="convertLabel" style="display:none"></span>
+            </button>
+          </div>
+          <div class="date-row">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <span id="joinDateLabel">注册日期：</span>
+            <span class="date-val" id="joinDate"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats (2 cols: 公开仓库 + 关注者) -->
+      <div class="stats-row">
+        <!-- 仓库: clickable → expand repos panel -->
+        <div class="stat stat-repos" id="reposStat" onclick="toggleReposPanel()">
+          <div class="stat-inner">
+            <div class="stat-inner-text">
+              <div class="stat-val" id="statRepos">—</div>
+              <div class="stat-lbl" id="statReposLbl">公开仓库</div>
+            </div>
+            <svg class="repos-chevron" id="reposChevron" width="13" height="13"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="statFollowers">—</div>
+          <div class="stat-lbl" id="statFollowersLbl">关注者</div>
+        </div>
+      </div>
+
+      <!-- Repos panel (hidden until clicked) -->
+      <div class="repos-panel" id="reposPanel">
+        <div class="repos-search-bar">
+          <div class="repos-search-field">
+            <svg class="repos-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input class="repos-search-input" id="reposSearchInput"
+              type="text" autocomplete="off" spellcheck="false"
+              oninput="filterRepos(); toggleReposClear()" />
+            <button class="repos-clear-btn" id="reposClearBtn" onclick="clearReposSearch()" tabindex="-1">✕</button>
+          </div>
+          <span class="repos-meta" id="reposMeta"></span>
+        </div>
+        <div class="repos-list" id="reposList"></div>
+        <div class="repos-more" id="reposMore" style="display:none"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <span id="footerText">数据来源：</span><span class="footer-api-name">GitHub REST API</span>（<a id="footerDocs" href="https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api" target="_blank" rel="noopener">官方文档</a>）
+  &nbsp;·&nbsp; <span id="footerRate">IP 限制 60 次/小时</span>
+</footer>
+
+<script>
+/* ── Theme toggle ─────────────────────────────────────────────────────────── */
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  document.documentElement.setAttribute('data-theme', isLight ? 'dark' : 'light');
+}
+
+/* ── i18n ──────────────────────────────────────────────────────────────────── */
+let lang = 'zh';
+const T = {
+  zh: {
+    htmlLang:'zh-CN', langName:'简体',
+    search:'查询',
+    emptyState:'输入 GitHub 用户名后按查询', loading:'正在查询…',
+    ageLabel:'账号年龄', joinDate:'注册日期：',
+    unitDay:'天', toYMD:'年月日', toDays:'天',
+    repos:'公开仓库', followers:'关注者',
+    years:'年', months:'月', days:'天',
+    notFound:'⚠ 用户不存在，请检查用户名拼写。',
+    rateLimited:'⏳ API 请求频率已达上限，请稍后再试或换个网络。',
+    error: m=>`❌ 查询失败：${m}`,
+    footerText:'数据来源：', dateLocale:'zh-CN',
+    footerDocs:'官方文档', footerRate:'IP 限制 60 次/小时',
+    reposSearch:'搜索仓库名称…',
+    reposCount: n=>`共 ${n} 个`, reposFiltered: (f,t)=>`${f} / ${t}`,
+    reposEmpty:'无匹配仓库', reposLoadError:'加载失败，请重试',
+    updatedAt:'更新于', fork:'fork', loadMore: n=>`还有 ${n} 个仓库`,
+  },
+  'zh-TW': {
+    htmlLang:'zh-TW', langName:'繁體',
+    search:'查詢',
+    emptyState:'輸入 GitHub 使用者名稱後按查詢', loading:'正在查詢…',
+    ageLabel:'帳號年齡', joinDate:'註冊日期：',
+    unitDay:'天', toYMD:'年月日', toDays:'天',
+    repos:'公開儲存庫', followers:'追蹤者',
+    years:'年', months:'月', days:'天',
+    notFound:'⚠ 使用者不存在，請檢查使用者名稱拼寫。',
+    rateLimited:'⏳ API 請求頻率已達上限，請稍後再試或換個網路。',
+    error: m=>`❌ 查詢失敗：${m}`,
+    footerText:'資料來源：', dateLocale:'zh-TW',
+    footerDocs:'官方文件', footerRate:'IP 限制 60 次/小時',
+    reposSearch:'搜尋儲存庫名稱…',
+    reposCount: n=>`共 ${n} 個`, reposFiltered: (f,t)=>`${f} / ${t}`,
+    reposEmpty:'無符合儲存庫', reposLoadError:'載入失敗，請重試',
+    updatedAt:'更新於', fork:'fork', loadMore: n=>`還有 ${n} 個儲存庫`,
+  },
+  ja: {
+    htmlLang:'ja', langName:'日本語',
+    search:'検索',
+    emptyState:'GitHub ユーザー名を入力して検索してください', loading:'取得中…',
+    ageLabel:'アカウント年齢', joinDate:'登録日：',
+    unitDay:'日', toYMD:'年月日', toDays:'日数',
+    repos:'公開リポジトリ', followers:'フォロワー',
+    years:'年', months:'ヶ月', days:'日',
+    notFound:'⚠ ユーザーが見つかりません。スペルをご確認ください。',
+    rateLimited:'⏳ API レート制限に達しました。しばらく待つかネットワークを変えてください。',
+    error: m=>`❌ エラー：${m}`,
+    footerText:'データ提供元：', dateLocale:'ja-JP',
+    footerDocs:'公式ドキュメント', footerRate:'IP レート制限 60回/時',
+    reposSearch:'リポジトリ名を検索…',
+    reposCount: n=>`全 ${n} 件`, reposFiltered: (f,t)=>`${f} / ${t} 件`,
+    reposEmpty:'該当するリポジトリなし', reposLoadError:'読み込み失敗、再試行してください',
+    updatedAt:'更新', fork:'fork', loadMore: n=>`残り ${n} 件`,
+  },
+  en: {
+    htmlLang:'en', langName:'EN',
+    search:'Search',
+    emptyState:'Enter a GitHub username and press Search', loading:'Fetching…',
+    ageLabel:'Account Age', joinDate:'Joined: ',
+    unitDay:'days', toYMD:'Y·M·D', toDays:'days',
+    repos:'Repositories', followers:'Followers',
+    years:'yr', months:'mo', days:'days',
+    notFound:'⚠ User not found. Check the spelling.',
+    rateLimited:'⏳ Rate limit reached. Wait a moment or switch networks.',
+    error: m=>`❌ Error: ${m}`,
+    footerText:'Data from ', dateLocale:'en-US',
+    footerDocs:'Official Docs', footerRate:'IP limit: 60 req/hr',
+    reposSearch:'Search repository names…',
+    reposCount: n=>`${n} repositories`, reposFiltered: (f,t)=>`${f} of ${t}`,
+    reposEmpty:'No matching repositories', reposLoadError:'Failed to load. Please try again.',
+    updatedAt:'Updated', fork:'fork', loadMore: n=>`${n} more repositories`,
+  },
+};
+
+function t(key, ...args) {
+  const v = T[lang][key];
+  return typeof v === 'function' ? v(...args) : (v ?? '');
+}
+
+/* ── Language dropdown ─────────────────────────────────────────────────────── */
+let menuOpen = false;
+function toggleMenu() {
+  menuOpen = !menuOpen;
+  qs('#langMenu').classList.toggle('open', menuOpen);
+  qs('#langTrigger').classList.toggle('open', menuOpen);
+}
+function setLang(l) {
+  lang = l; menuOpen = false;
+  qs('#langMenu').classList.remove('open');
+  qs('#langTrigger').classList.remove('open');
+  applyLang();
+}
+document.addEventListener('click', e => {
+  if (menuOpen && !qs('#langWrap').contains(e.target)) {
+    menuOpen = false;
+    qs('#langMenu').classList.remove('open');
+    qs('#langTrigger').classList.remove('open');
+  }
+});
+
+function applyLang() {
+  document.documentElement.lang    = t('htmlLang');
+  qs('#langLabel').textContent      = t('langName');
+  qs('#searchBtnText').textContent  = t('search');
+  qs('#emptyText').textContent      = t('emptyState');
+  qs('#loadingText').textContent    = t('loading');
+  qs('#ageLabel').textContent       = t('ageLabel');
+  qs('#joinDateLabel').textContent  = t('joinDate');
+  qs('#statReposLbl').textContent   = t('repos');
+  qs('#statFollowersLbl').textContent = t('followers');
+  qs('#convertLabel').textContent   = showingDays ? t('toYMD') : t('toDays');
+  qs('#ageUnit').textContent        = t('unitDay');
+  qs('#ymdYu').textContent = t('years');
+  qs('#ymdMu').textContent = t('months');
+  qs('#ymdDu').textContent = t('days');
+  qs('#reposSearchInput').placeholder = t('reposSearch');
+  qs('#footerText').textContent     = t('footerText');
+  qs('#footerDocs').textContent     = t('footerDocs');
+  qs('#footerRate').textContent     = t('footerRate');
+  document.querySelectorAll('.lang-option').forEach(b =>
+    b.classList.toggle('active', b.dataset.lang === lang));
+  if (currentData) { refreshDisplay(); updateReposMeta(); }
+}
+
+/* ── State ─────────────────────────────────────────────────────────────────── */
+let showingDays    = true;
+let currentDays    = 0;
+let currentData    = null;
+let allRepos       = null;    // fetched repos array
+let filteredRepos  = [];
+let reposPanelOpen = false;
+let animFrame      = null;
+const PAGE_SIZE    = 30;
+
+function qs(sel) { return document.querySelector(sel); }
+
+/* ── Search ─────────────────────────────────────────────────────────────────── */
+qs('#usernameInput').addEventListener('keydown', e => { if (e.key === 'Enter') query(); });
+
+function toggleClearBtn() {
+  const hasText = qs('#usernameInput').value.length > 0;
+  qs('#clearBtn').classList.toggle('visible', hasText);
+}
+function clearInput() {
+  qs('#usernameInput').value = '';
+  qs('#clearBtn').classList.remove('visible');
+  qs('#usernameInput').focus();
+}
+function toggleReposClear() {
+  const hasText = (qs('#reposSearchInput').value || '').length > 0;
+  qs('#reposClearBtn').classList.toggle('visible', hasText);
+}
+function clearReposSearch() {
+  qs('#reposSearchInput').value = '';
+  qs('#reposClearBtn').classList.remove('visible');
+  qs('#reposSearchInput').focus();
+  filterRepos();
+}
+
+async function query() {
+  const raw = qs('#usernameInput').value.trim();
+  const username = raw.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
+  if (!username) return;
+
+  // reset repo state on new search
+  allRepos = null; filteredRepos = [];
+  reposPanelOpen = false;
+  qs('#reposPanel').style.display = 'none';
+  qs('#reposChevron').classList.remove('open');
+  qs('#reposList').innerHTML = '';
+  qs('#reposMeta').textContent = '';
+  qs('#reposMore').style.display = 'none';
+  qs('#reposSearchInput').value = '';
+  const rClear = qs('#reposClearBtn'); if (rClear) rClear.classList.remove('visible');
+  qs('#searchBtn').disabled = true;
+
+  try {
+    const res = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`);
+    if (res.status === 404) { show('error'); qs('#errorBox').textContent = t('notFound'); return; }
+    if (res.status === 403 || res.status === 429) {
+      const reset = res.headers.get('X-RateLimit-Reset');
+      const extra = reset ? ` (Reset: ${new Date(+reset*1000).toLocaleTimeString()})` : '';
+      show('rate'); qs('#rateBox').textContent = t('rateLimited') + extra; return;
+    }
+    if (!res.ok) {
+      const j = await res.json().catch(()=>({}));
+      show('error'); qs('#errorBox').textContent = t('error', j.message || res.statusText); return;
+    }
+    currentData = await res.json();
+    renderResult(currentData);
+  } catch(err) {
+    show('error'); qs('#errorBox').textContent = t('error', err.message);
+  } finally {
+    qs('#searchBtn').disabled = false;
+  }
+}
+
+function show(which) {
+  qs('#emptyState').style.display    = which==='empty'   ? 'flex'  : 'none';
+  qs('#loadingState').style.display  = which==='loading' ? 'flex'  : 'none';
+  qs('#errorBox').style.display      = which==='error'   ? 'block' : 'none';
+  qs('#rateBox').style.display       = which==='rate'    ? 'block' : 'none';
+  qs('#profileResult').style.display = which==='profile' ? 'flex'  : 'none';
+}
+
+/* ── Render profile ─────────────────────────────────────────────────────────── */
+function renderResult(data) {
+  qs('#avatar').src = data.avatar_url + '&s=128';
+  qs('#profileName').textContent = data.name || data.login;
+  qs('#profileLogin').textContent = '@' + data.login;
+  qs('#profileLogin').href = `https://github.com/${data.login}`;
+  const bio = data.bio || '';
+  qs('#profileBio').textContent = bio;
+  qs('#profileBio').style.display = bio ? '' : 'none';
+
+  const created = new Date(data.created_at);
+  currentDays = Math.floor((Date.now() - created) / 86400000);
+  showingDays = true;
+  refreshDisplay();
+  animCount(0, currentDays, 900);
+
+  qs('#statRepos').textContent     = fmt(data.public_repos);
+  qs('#statFollowers').textContent = fmt(data.followers);
+
+  const el = qs('#profileResult');
+  el.classList.remove('fade-up'); void el.offsetWidth; el.classList.add('fade-up');
+  show('profile');
+}
+
+/* ── Age display ────────────────────────────────────────────────────────────── */
+function calcYMD(created) {
+  const now = new Date();
+  let y = now.getFullYear() - created.getFullYear();
+  let m = now.getMonth()    - created.getMonth();
+  let d = now.getDate()     - created.getDate();
+  if (d < 0) { m--; d += new Date(now.getFullYear(), now.getMonth(), 0).getDate(); }
+  if (m < 0) { y--; m += 12; }
+  return { y, m, d };
+}
+
+function refreshDisplay() {
+  const created = new Date(currentData.created_at);
+  qs('#joinDate').textContent = created.toLocaleDateString(t('dateLocale'), {year:'numeric',month:'long',day:'numeric'});
+  qs('#ageLabel').textContent     = t('ageLabel');
+  qs('#joinDateLabel').textContent= t('joinDate');
+  qs('#statReposLbl').textContent = t('repos');
+  qs('#statFollowersLbl').textContent = t('followers');
+  qs('#ageUnit').textContent = t('unitDay');
+  qs('#ymdYu').textContent = t('years'); qs('#ymdMu').textContent = t('months'); qs('#ymdDu').textContent = t('days');
+  if (showingDays) {
+    qs('#daysWrap').style.display   = '';
+    qs('#ymdWrap').style.display    = 'none';
+    qs('#convertLabel').textContent = t('toYMD');
+    qs('#ageNumber').textContent    = fmt(currentDays);
+  } else {
+    const {y,m,d} = calcYMD(created);
+    qs('#daysWrap').style.display   = 'none';
+    qs('#ymdWrap').style.display    = '';
+    qs('#convertLabel').textContent = t('toDays');
+    qs('#ymdY').textContent = y; qs('#ymdM').textContent = m; qs('#ymdD').textContent = d;
+  }
+}
+
+function toggleUnit() {
+  showingDays = !showingDays;
+  if (showingDays) {
+    qs('#daysWrap').style.display   = '';
+    qs('#ymdWrap').style.display    = 'none';
+    qs('#convertLabel').textContent = t('toYMD');
+    animCount(0, currentDays, 700);
+  } else {
+    const created = new Date(currentData.created_at);
+    const {y,m,d} = calcYMD(created);
+    qs('#daysWrap').style.display   = 'none';
+    qs('#ymdWrap').style.display    = '';
+    qs('#convertLabel').textContent = t('toDays');
+    qs('#ymdYu').textContent = t('years'); qs('#ymdMu').textContent = t('months'); qs('#ymdDu').textContent = t('days');
+    animEl(qs('#ymdY'), 0, y, 500);
+    animEl(qs('#ymdM'), 0, m, 620);
+    animEl(qs('#ymdD'), 0, d, 740);
+  }
+}
+
+/* ── Repos panel ─────────────────────────────────────────────────────────────── */
+async function toggleReposPanel() {
+  reposPanelOpen = !reposPanelOpen;
+  qs('#reposChevron').classList.toggle('open', reposPanelOpen);
+  const panel = qs('#reposPanel');
+
+  if (!reposPanelOpen) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'flex';
+
+  if (allRepos !== null) { filterRepos(); return; } // already loaded
+
+  // fetch repos
+  qs('#reposList').innerHTML = `<div class="repos-loading-row"><div class="spinner"></div> <span id="loadingText2">${t('loading')}</span></div>`;
+  qs('#reposMeta').textContent = '';
+  qs('#reposMore').style.display = 'none';
+
+  try {
+    // 分页拉取全部仓库（每页100条，跟随 Link header 直到无 next）
+    allRepos = await fetchAllRepos(currentData.login);
+    // 排序：非 fork 仓库按 star 降序，fork 仓库放末尾
+    allRepos.sort((a,b) => {
+      if (a.fork !== b.fork) return a.fork ? 1 : -1;
+      return b.stargazers_count - a.stargazers_count;
+    });
+    filterRepos();
+  } catch(err) {
+    qs('#reposList').innerHTML = `<div class="repos-error-row">❌ ${t('reposLoadError')}: ${err.message}</div>`;
+  }
+}
+
+/* 分页拉取所有仓库，跟随 Link: rel="next" header */
+async function fetchAllRepos(login) {
+  let repos = [];
+  let url = `https://api.github.com/users/${encodeURIComponent(login)}/repos?per_page=100&sort=updated`;
+  while (url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.statusText);
+    const page = await res.json();
+    repos = repos.concat(page);
+    // 解析 Link header 取 next 页 URL
+    const link = res.headers.get('Link') || '';
+    const next = link.match(/<([^>]+)>;\s*rel="next"/);
+    url = next ? next[1] : null;
+    // 每拉完一页实时更新加载提示
+    qs('#reposList').innerHTML =
+      `<div class="repos-loading-row"><div class="spinner"></div> <span>${repos.length} / ${t('loading')}</span></div>`;
+  }
+  return repos;
+}
+
+function filterRepos() {
+  if (!allRepos) return;
+  const q = (qs('#reposSearchInput').value || '').trim().toLowerCase();
+  filteredRepos = q
+    ? allRepos.filter(r => r.name.toLowerCase().includes(q) || (r.description||'').toLowerCase().includes(q))
+    : [...allRepos];
+  updateReposMeta();
+  renderRepoPage(filteredRepos.slice(0, PAGE_SIZE));
+  const remaining = filteredRepos.length - PAGE_SIZE;
+  if (remaining > 0) {
+    qs('#reposMore').style.display = '';
+    qs('#reposMore').textContent = t('loadMore', remaining);
+    qs('#reposMore').onclick = () => loadMoreRepos();
+  } else {
+    qs('#reposMore').style.display = 'none';
+  }
+}
+
+function loadMoreRepos() {
+  const currentCount = qs('#reposList').querySelectorAll('.repo-item').length;
+  const nextBatch = filteredRepos.slice(currentCount, currentCount + PAGE_SIZE);
+  appendRepos(nextBatch);
+  const remaining = filteredRepos.length - qs('#reposList').querySelectorAll('.repo-item').length;
+  if (remaining > 0) {
+    qs('#reposMore').textContent = t('loadMore', remaining);
+  } else {
+    qs('#reposMore').style.display = 'none';
+  }
+}
+
+function updateReposMeta() {
+  if (!allRepos) return;
+  const q = (qs('#reposSearchInput').value || '').trim();
+  qs('#reposMeta').textContent = q
+    ? t('reposFiltered', filteredRepos.length, allRepos.length)
+    : t('reposCount', allRepos.length);
+}
+
+function renderRepoPage(repos) {
+  if (!repos.length) {
+    qs('#reposList').innerHTML = `<div class="repos-empty">${t('reposEmpty')}</div>`;
+    return;
+  }
+  qs('#reposList').innerHTML = '';
+  appendRepos(repos);
+}
+
+/* 按 star 数量返回颜色（让热门仓库一眼可见） */
+function starColor(n) {
+  if (n < 50)   return '#484f58';   // 暗灰：0-49
+  if (n < 100)  return '#3fb950';   // 绿：50-99
+  if (n < 1000) return '#f0c040';   // 浏览器收藏黄：100-999
+  return '#e05252';                 // 柔和红：1000+
+}
+
+function appendRepos(repos) {
+  const list = qs('#reposList');
+  repos.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'repo-item';
+
+    const updated = relativeTime(r.updated_at);
+    const langDot  = r.language ? `<span class="lang-dot" style="background:${langColor(r.language)}"></span>` : '';
+    const langSpan = r.language ? `<span class="repo-lang">${langDot}${r.language}</span>` : '';
+    const forkBadge = r.fork ? `<span class="repo-fork-badge">${t('fork')}</span>` : '';
+    const desc = r.description ? `<div class="repo-desc">${esc(r.description)}</div>` : '';
+
+    div.innerHTML = `
+      <div class="repo-top">
+        <a class="repo-name" href="${esc(r.html_url)}" target="_blank" rel="noopener noreferrer">${esc(r.name)}</a>
+        ${forkBadge}
+        <span class="repo-stars" style="color:${starColor(r.stargazers_count)}">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          ${fmt(r.stargazers_count)}
+        </span>
+      </div>
+      ${desc}
+      <div class="repo-bottom">
+        ${langSpan}
+        <span class="repo-updated">${t('updatedAt')} ${updated}</span>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+/* ── Helpers ─────────────────────────────────────────────────────────────────── */
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function relativeTime(iso) {
+  const diff = Date.now() - new Date(iso);
+  const d = Math.floor(diff / 86400000);
+  if (d === 0) return lang === 'en' ? 'today' : '今天';
+  if (d < 30)  return lang === 'en' ? `${d}d ago` : `${d}天前`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return lang === 'en' ? `${mo}mo ago` : `${mo}个月前`;
+  const yr = Math.floor(mo / 12);
+  return lang === 'en' ? `${yr}yr ago` : `${yr}年前`;
+}
+
+const LANG_COLORS = {
+  JavaScript:'#f1e05a', TypeScript:'#3178c6', Python:'#3572A5', Java:'#b07219',
+  'C++':'#f34b7d', C:'#555555', 'C#':'#178600', Go:'#00ADD8', Rust:'#dea584',
+  Ruby:'#701516', PHP:'#4F5D95', Swift:'#F05138', Kotlin:'#A97BFF',
+  Shell:'#89e051', HTML:'#e34c26', CSS:'#563d7c', Vue:'#41b883',
+  Dart:'#00B4AB', Scala:'#c22d40', R:'#198CE7', Lua:'#000080',
+  Haskell:'#5e5086', Elixir:'#6e4a7e', Clojure:'#db5855', Nim:'#ffc200',
+};
+function langColor(l) { return LANG_COLORS[l] || '#8b949e'; }
+function fmt(n) { return Number(n).toLocaleString(); }
+
+/* ── Counter animation ──────────────────────────────────────────────────────── */
+function animCount(from, to, dur) {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  const start = performance.now();
+  const el = qs('#ageNumber');
+  (function step(now) {
+    const p = Math.min((now-start)/dur, 1);
+    el.textContent = fmt(Math.round(from + (to-from)*(1-Math.pow(1-p,3))));
+    if (p < 1) animFrame = requestAnimationFrame(step);
+    else el.textContent = fmt(to);
+  })(performance.now());
+}
+function animEl(el, from, to, dur) {
+  const start = performance.now();
+  (function step(now) {
+    const p = Math.min((now-start)/dur, 1);
+    el.textContent = Math.round(from + (to-from)*(1-Math.pow(1-p,3)));
+    if (p < 1) requestAnimationFrame(step); else el.textContent = to;
+  })(performance.now());
+}
+
+/* ── Init ────────────────────────────────────────────────────────────────────── */
+show('empty');
+applyLang();
+qs('#usernameInput').focus();
+</script>
+</body>
+</html>
